@@ -1,6 +1,7 @@
 import { Product } from '../models/index.js';
 import * as productRepo from '../repositories/product.repository.js';
 import { computeLebalmaPlan, planFromProduct } from '../services/lebalma.service.js';
+import { subscribeStockAlert, notifyBackInStock } from '../services/stockAlert.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { success, created, fail } from '../utils/apiResponse.js';
 
@@ -34,8 +35,24 @@ export const create = asyncHandler(async (req, res) => {
 export const update = asyncHandler(async (req, res) => {
   const product = await Product.findByPk(req.params.id);
   if (!product) return fail(res, { status: 404, message: 'Produit introuvable' });
+  const wasOutOfStock = (product.stock || 0) <= 0;
   await product.update(req.body);
+  // Retour en stock (0 → > 0) : prévient les clients inscrits « Prévenez-moi »
+  if (wasOutOfStock && (product.stock || 0) > 0) {
+    notifyBackInStock(product);
+  }
   return success(res, { message: 'Produit mis à jour', data: product });
+});
+
+// POST /api/products/:id/stock-alert  → « Prévenez-moi quand c'est dispo » (client connecté)
+export const subscribeAlert = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
+  if (!product) return fail(res, { status: 404, message: 'Produit introuvable' });
+  if ((product.stock || 0) > 0) {
+    return fail(res, { status: 400, message: 'Ce produit est déjà disponible' });
+  }
+  await subscribeStockAlert(req.user.id, product.id);
+  return success(res, { message: 'Vous serez averti dès le retour en stock' });
 });
 
 // DELETE /api/admin/products/:id

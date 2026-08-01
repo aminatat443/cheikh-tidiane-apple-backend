@@ -8,6 +8,8 @@ import orderRoutes from './order.routes.js';
 import paymentRoutes from './payment.routes.js';
 import favoriteRoutes from './favorite.routes.js';
 import lebalmaRoutes from './lebalma.routes.js';
+import returnRoutes from './return.routes.js';
+import notificationRoutes from './notification.routes.js';
 import adminRoutes from './admin.routes.js';
 
 const router = Router();
@@ -21,6 +23,8 @@ router.use('/orders', orderRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/favorites', favoriteRoutes);
 router.use('/lebalma', lebalmaRoutes);
+router.use('/returns', returnRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

@@ -53,6 +53,9 @@ export const LebalmaInstallment = sequelize.define(
       type: DataTypes.ENUM(...Object.values(INSTALLMENT_STATUS)),
       defaultValue: INSTALLMENT_STATUS.UPCOMING,
     },
+    // Méthode choisie par le client lors de l'initiation du paiement
+    paymentMethod: { type: DataTypes.STRING },
+    paymentInitiatedAt: { type: DataTypes.DATE },
     paidAt: { type: DataTypes.DATE },
   },
   { tableName: 'lebalma_installments' }

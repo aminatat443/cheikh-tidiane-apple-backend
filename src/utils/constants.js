@@ -2,7 +2,11 @@
 export const ROLES = {
   CLIENT: 'client',
   ADMIN: 'admin',
+  SUPERADMIN: 'superadmin', // Cheikh Tidiane : peut créer/gérer les autres admins
 };
+
+// Rôles disposant de l'accès au back-office
+export const ADMIN_ROLES = ['admin', 'superadmin'];
 
 // Catégories de produits
 export const CATEGORIES = {
@@ -38,6 +42,20 @@ export const PAYMENT_STATUS = {
   REFUNDED: 'refunded',
 };
 
+// Statuts d'une demande de retour
+export const RETURN_STATUS = {
+  REQUESTED: 'requested', // demande envoyée par le client
+  APPROVED: 'approved', // acceptée, en attente de réception/remboursement
+  REJECTED: 'rejected', // refusée par la boutique
+  REFUNDED: 'refunded', // remboursement effectué
+};
+
+// Statuts de commande éligibles à une demande de retour
+export const RETURNABLE_ORDER_STATUS = ['paid', 'shipped', 'delivered'];
+
+// Fenêtre de retour (jours après la commande) — configurable
+export const RETURN_WINDOW_DAYS = 14;
+
 // === LEBALMA (financement échelonné) ===
 export const LEBALMA_FREQUENCY = {
   WEEKLY: 'weekly', // à partir de l'iPhone 11 Pro
@@ -54,6 +72,7 @@ export const LEBALMA_CONTRACT_STATUS = {
 
 export const INSTALLMENT_STATUS = {
   UPCOMING: 'upcoming',
+  PENDING: 'pending', // paiement initié par le client, en attente de validation (virement/espèce)
   PAID: 'paid',
   LATE: 'late',
 };

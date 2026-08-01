@@ -16,6 +16,11 @@ function getTransporter() {
   return transporter;
 }
 
+/** Vrai si un serveur SMTP est configuré (sinon les envois sont simulés/log). */
+export function isMailConfigured() {
+  return Boolean(process.env.SMTP_HOST);
+}
+
 /**
  * Envoie un email. En développement sans SMTP configuré, log seulement.
  */
@@ -31,4 +36,22 @@ export async function sendMail({ to, subject, html, text }) {
     text,
     html,
   });
+}
+
+/** Gabarit HTML sobre pour les notifications (commandes, Lebalma…). */
+export function notificationEmail({ name, title, message }) {
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:auto;color:#111827">
+    <div style="background:#111827;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0">
+      <strong style="font-size:16px">Cheikh Tidiane Apple</strong>
+    </div>
+    <div style="border:1px solid #E5E7EB;border-top:none;border-radius:0 0 12px 12px;padding:20px">
+      <p style="margin:0 0 10px">Bonjour ${name || ''},</p>
+      <h2 style="font-size:16px;margin:0 0 8px;color:#0A84FF">${title}</h2>
+      <p style="margin:0;line-height:1.5;color:#374151">${message}</p>
+    </div>
+    <p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:12px">
+      E-mail automatique — merci de ne pas y répondre.
+    </p>
+  </div>`;
 }

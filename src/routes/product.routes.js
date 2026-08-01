@@ -9,6 +9,9 @@ const router = Router();
 router.get('/', productController.list);
 router.get('/:id', productController.getOne);
 
+// Alerte « Prévenez-moi » en cas de retour en stock (client connecté)
+router.post('/:id/stock-alert', protect, productController.subscribeAlert);
+
 // Avis produit
 router.get('/:productId/reviews', reviewController.listByProduct);
 router.post('/:productId/reviews', protect, reviewController.create);

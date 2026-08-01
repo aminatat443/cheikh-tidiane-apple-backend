@@ -11,5 +11,7 @@ router.get('/simulate', lebalmaController.simulate);
 router.use(protect);
 router.post('/subscribe', lebalmaController.subscribe);
 router.get('/contracts', lebalmaController.myContracts);
+// Le client initie le paiement d'une de ses échéances (Wave / OM / virement / espèces)
+router.post('/installments/:id/pay', lebalmaController.clientInitiatePayment);
 
 export default router;

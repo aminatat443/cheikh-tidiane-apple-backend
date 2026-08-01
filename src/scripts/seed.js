@@ -99,10 +99,10 @@ async function seed() {
   console.log('🗑️  Base réinitialisée.');
 
   await User.create({
-    name: 'Admin',
+    name: 'Cheikh Tidiane',
     email: 'admin@cheikhtidiane.com',
     password: 'admin123',
-    role: ROLES.ADMIN,
+    role: ROLES.SUPERADMIN, // super-admin : peut créer/gérer les autres admins
     isKycVerified: true,
   });
 
@@ -148,6 +148,20 @@ async function seed() {
     }
   }
 
+  // iPhone XR — NON éligible au financement Lebalma (modèle plus ancien)
+  products.push({
+    name: 'iPhone XR', slug: 'iphone-xr', model: 'iPhone XR', categoryId: iphone.id,
+    description: 'Apple iPhone XR. Modèle non éligible au paiement échelonné Lebalma.',
+    price: 95000, stock: 20, colors: COLORS,
+    storages: ['64 Go', '128 Go', '256 Go'],
+    variants: [
+      { storage: '64 Go', price: 95000 },
+      { storage: '128 Go', price: 110000 },
+      { storage: '256 Go', price: 125000 },
+    ],
+    images: [], newAvailable: false, lebalmaEligible: false,
+  });
+
   // Quelques produits hors iPhone (non éligibles Lebalma pour l'instant)
   products.push(
     {
@@ -161,7 +175,8 @@ async function seed() {
   );
 
   await Product.bulkCreate(products);
-  console.log(`✅ ${products.length} produits insérés (dont ${products.length - 2} iPhones éligibles Lebalma).`);
+  const eligible = products.filter((p) => p.lebalmaEligible).length;
+  console.log(`✅ ${products.length} produits insérés (dont ${eligible} éligibles Lebalma, iPhone XR exclu).`);
   await sequelize.close();
 }
 

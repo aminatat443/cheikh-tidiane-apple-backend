@@ -6,6 +6,8 @@ export const Cart = sequelize.define(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     userId: { type: DataTypes.INTEGER, allowNull: false, unique: true },
+    // Dernière relance « panier abandonné » envoyée (anti-spam).
+    reminderSentAt: { type: DataTypes.DATE },
   },
   { tableName: 'carts' }
 );

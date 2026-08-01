@@ -26,10 +26,20 @@ const User = sequelize.define(
     // KYC (Lebalma)
     isKycVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
     idDocumentUrl: { type: DataTypes.STRING },
+    // Pièce d'identité : photos recto/verso + infos extraites (OCR)
+    idCardFrontUrl: { type: DataTypes.STRING },
+    idCardBackUrl: { type: DataTypes.STRING },
+    idNin: { type: DataTypes.STRING },
+    idBirthDate: { type: DataTypes.STRING },
+    idExpiryDate: { type: DataTypes.STRING },
+    // Double authentification (TOTP / Google Authenticator)
+    twoFactorEnabled: { type: DataTypes.BOOLEAN, defaultValue: false },
+    twoFactorSecret: { type: DataTypes.STRING }, // secret base32 — jamais exposé au client
   },
   {
     tableName: 'users',
-    defaultScope: { attributes: { exclude: ['password'] } },
+    // On n'expose jamais le mot de passe ni le secret 2FA par défaut.
+    defaultScope: { attributes: { exclude: ['password', 'twoFactorSecret'] } },
     scopes: { withPassword: { attributes: {} } },
     hooks: {
       beforeSave: async (user) => {

@@ -33,7 +33,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '5mb' }));
+// On conserve le corps brut (req.rawBody) pour vérifier la signature des webhooks.
+app.use(express.json({ limit: '5mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== 'test') {

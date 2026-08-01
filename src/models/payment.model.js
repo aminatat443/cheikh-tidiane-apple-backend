@@ -16,7 +16,13 @@ const Payment = sequelize.define(
       type: DataTypes.ENUM(...Object.values(PAYMENT_STATUS)),
       defaultValue: PAYMENT_STATUS.PENDING,
     },
-    // Référence renvoyée par la passerelle (Wave / OM / carte)
+    // 'order' ou 'installment' (échéance Lebalma)
+    purpose: { type: DataTypes.STRING, defaultValue: 'order' },
+    // 'wave' | 'orange_money' | 'card' | 'simulation'
+    provider: { type: DataTypes.STRING },
+    // Clé d'idempotence (une tentative = une clé) — évite les double-crédits.
+    idempotencyKey: { type: DataTypes.STRING, unique: true },
+    // Référence / id de session renvoyé par la passerelle (Wave / OM / carte)
     providerRef: { type: DataTypes.STRING },
     rawResponse: { type: DataTypes.JSON },
   },

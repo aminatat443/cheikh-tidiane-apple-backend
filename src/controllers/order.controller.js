@@ -3,6 +3,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { success, created, fail } from '../utils/apiResponse.js';
 import { ORDER_STATUS } from '../utils/constants.js';
 import { notifyAdmins } from '../sockets/index.js';
+import { createNotification, notifyAllAdmins, fcfa } from '../services/notification.service.js';
+import { sendOrderEmail } from '../services/orderEmail.service.js';
 
 function genReference(prefix = 'CMD') {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
@@ -63,6 +65,24 @@ export const createOrder = asyncHandler(async (req, res) => {
   });
 
   notifyAdmins('order:new', { id: result.id, reference: result.reference, total: result.total });
+
+  // Notifications persistées : admins + accusé de réception au client
+  await notifyAllAdmins({
+    type: 'order_new',
+    title: 'Nouvelle commande',
+    message: `Commande ${result.reference} — ${fcfa(result.total)}`,
+    link: '/admin/orders',
+  });
+  await createNotification({
+    userId: req.user.id,
+    type: 'order_confirm',
+    title: 'Commande enregistrée',
+    message: `Votre commande ${result.reference} a bien été reçue. Total : ${fcfa(result.total)}.`,
+    link: '/orders',
+  });
+
+  // E-mail de confirmation (habillé, best-effort)
+  sendOrderEmail(result.id, 'confirmation');
 
   return created(res, { message: 'Commande créée', data: result });
 });

@@ -13,6 +13,10 @@ export async function protect(req, res, next) {
     if (!token) return fail(res, { status: 401, message: 'Non authentifié' });
 
     const decoded = verifyToken(token);
+    // Un jeton temporaire 2FA ne donne pas accès aux ressources protégées.
+    if (decoded.twoFactorPending) {
+      return fail(res, { status: 401, message: 'Vérification 2FA requise' });
+    }
     const user = await User.findByPk(decoded.id);
     if (!user) return fail(res, { status: 401, message: 'Utilisateur introuvable' });
 
@@ -35,4 +39,8 @@ export function restrictTo(...roles) {
   };
 }
 
-export const adminOnly = restrictTo(ROLES.ADMIN);
+// L'accès admin est ouvert aux admins ET au super-admin.
+export const adminOnly = restrictTo(ROLES.ADMIN, ROLES.SUPERADMIN);
+
+// Réservé au super-admin (gestion des comptes admin).
+export const superAdminOnly = restrictTo(ROLES.SUPERADMIN);

@@ -9,6 +9,10 @@ import { Order, OrderItem } from './order.model.js';
 import Payment from './payment.model.js';
 import Review from './review.model.js';
 import { LebalmaContract, LebalmaInstallment } from './lebalma.model.js';
+import { ReturnRequest, ReturnItem } from './return.model.js';
+import Setting from './setting.model.js';
+import Notification from './notification.model.js';
+import StockAlert from './stockAlert.model.js';
 
 // === Associations ===
 
@@ -57,6 +61,25 @@ LebalmaContract.hasMany(LebalmaInstallment, { foreignKey: 'contractId', as: 'ins
 LebalmaInstallment.belongsTo(LebalmaContract, { foreignKey: 'contractId', as: 'contract' });
 Payment.belongsTo(LebalmaInstallment, { foreignKey: 'installmentId' });
 
+// Retours
+User.hasMany(ReturnRequest, { foreignKey: 'userId', as: 'returns' });
+ReturnRequest.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+Order.hasMany(ReturnRequest, { foreignKey: 'orderId', as: 'returns' });
+ReturnRequest.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+ReturnRequest.hasMany(ReturnItem, { foreignKey: 'returnRequestId', as: 'items' });
+ReturnItem.belongsTo(ReturnRequest, { foreignKey: 'returnRequestId' });
+ReturnItem.belongsTo(OrderItem, { foreignKey: 'orderItemId', as: 'orderItem' });
+
+// Notifications
+User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
+Notification.belongsTo(User, { foreignKey: 'userId' });
+
+// Alertes de retour en stock (« Prévenez-moi »)
+User.hasMany(StockAlert, { foreignKey: 'userId', as: 'stockAlerts' });
+StockAlert.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+Product.hasMany(StockAlert, { foreignKey: 'productId', as: 'stockAlerts' });
+StockAlert.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+
 export {
   sequelize,
   User,
@@ -71,4 +94,9 @@ export {
   Review,
   LebalmaContract,
   LebalmaInstallment,
+  ReturnRequest,
+  ReturnItem,
+  Setting,
+  Notification,
+  StockAlert,
 };
