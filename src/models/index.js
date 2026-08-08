@@ -13,6 +13,7 @@ import { ReturnRequest, ReturnItem } from './return.model.js';
 import Setting from './setting.model.js';
 import Notification from './notification.model.js';
 import StockAlert from './stockAlert.model.js';
+import Feedback from './feedback.model.js';
 
 // === Associations ===
 
@@ -99,4 +100,5 @@ export {
   Setting,
   Notification,
   StockAlert,
+  Feedback,
 };

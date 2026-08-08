@@ -21,8 +21,9 @@ const router = Router();
 // Toutes les routes admin sont protégées + réservées au rôle admin
 router.use(protect, adminOnly);
 
-// Tableau de bord
+// Tableau de bord & finance
 router.get('/dashboard', adminController.dashboard);
+router.get('/finance', adminController.financeStats);
 
 // Produits
 router.post('/products', createProductRules, validate, productController.create);
@@ -33,10 +34,12 @@ router.post(
   '/products/upload',
   upload.array('images', 6),
   asyncHandler(async (req, res) => {
+    // mode 'raw' (cachet/signature) = pas de fond blanc ; sinon optimisation produit.
+    const mode = req.query.mode === 'raw' || req.body?.mode === 'raw' ? 'raw' : 'product';
     const urls = [];
     for (const file of req.files || []) {
       if (isCloudinaryConfigured()) {
-        urls.push(await uploadBuffer(file.buffer));
+        urls.push(await uploadBuffer(file.buffer, { mode }));
       } else {
         const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
         const filename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${safe}`;
@@ -54,6 +57,7 @@ router.put('/categories/:id', categoryController.update);
 router.delete('/categories/:id', categoryController.remove);
 
 // Commandes & clients
+router.post('/orders', adminController.createManualOrder);
 router.get('/orders', adminController.allOrders);
 router.get('/orders/:id/invoice.pdf', adminController.invoicePdf);
 router.get('/orders/:id', adminController.getOrder);

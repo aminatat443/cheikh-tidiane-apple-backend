@@ -32,6 +32,7 @@ export const PAYMENT_METHODS = {
   ORANGE_MONEY: 'orange_money',
   CARD: 'card',
   LEBALMA: 'lebalma',
+  CASH: 'cash', // vente au comptoir / espèces
 };
 
 // Statuts de paiement

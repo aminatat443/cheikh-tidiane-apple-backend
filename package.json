@@ -10,6 +10,7 @@
     "db:sync": "node src/scripts/sync.js",
     "db:seed": "node src/scripts/seed.js",
     "db:seed:demo": "node src/scripts/seed-demo.js",
+    "db:seed:ratings": "node src/scripts/seed-ratings.js",
     "db:superadmin": "node src/scripts/promote-superadmin.js",
     "db:fix-indexes": "node src/scripts/fix-indexes.js",
     "db:reset-2fa": "node src/scripts/reset-2fa.js",

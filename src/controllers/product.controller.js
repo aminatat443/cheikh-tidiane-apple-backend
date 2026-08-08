@@ -27,7 +27,8 @@ export const getOne = asyncHandler(async (req, res) => {
 
 // POST /api/admin/products
 export const create = asyncHandler(async (req, res) => {
-  const product = await Product.create(req.body);
+  // Note par défaut à 4,5★ pour un nouveau produit (écrasée dès le 1er vrai avis).
+  const product = await Product.create({ ...req.body, ratingAvg: req.body.ratingAvg ?? 4.5 });
   return created(res, { message: 'Produit créé', data: product });
 });
 

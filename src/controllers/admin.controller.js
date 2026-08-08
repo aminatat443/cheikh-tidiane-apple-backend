@@ -11,7 +11,7 @@ import {
 } from '../models/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { success, created, fail } from '../utils/apiResponse.js';
-import { ORDER_STATUS, ROLES, ADMIN_ROLES, INSTALLMENT_STATUS } from '../utils/constants.js';
+import { ORDER_STATUS, PAYMENT_STATUS, ROLES, ADMIN_ROLES, INSTALLMENT_STATUS } from '../utils/constants.js';
 import { buildInvoicePdf, fetchImageBuffer } from '../services/invoice.service.js';
 import { createNotification } from '../services/notification.service.js';
 import { sendOrderEmail } from '../services/orderEmail.service.js';
@@ -66,6 +66,22 @@ function buildTrend(revRows, ordRows, days = 14) {
     d.setDate(today.getDate() - i);
     const key = dayKey(d);
     out.push({ day: key, label: `${d.getDate()}/${d.getMonth() + 1}`, revenue: rev[key] || 0, orders: ord[key] || 0 });
+  }
+  return out;
+}
+
+const MONTH_LABELS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+/** Construit la série des N derniers mois { month:'AAAA-MM', label, revenue } (mois vides = 0). */
+function buildMonths(rows, n = 12) {
+  const map = {};
+  for (const r of rows) map[r.month] = Number(r.revenue) || 0;
+  const out = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ month: key, label: MONTH_LABELS[d.getMonth()], revenue: map[key] || 0 });
   }
   return out;
 }
@@ -169,6 +185,140 @@ export const dashboard = asyncHandler(async (req, res) => {
       salesTrend: buildTrend(revByDay, ordByDay, 14),
     },
   });
+});
+
+// GET /api/admin/finance  → indicateurs financiers
+export const financeStats = asyncHandler(async (req, res) => {
+  const monthStart = startOfMonth();
+  const prevMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const since12 = new Date();
+  since12.setMonth(since12.getMonth() - 11);
+  since12.setDate(1);
+  since12.setHours(0, 0, 0, 0);
+
+  const paid = { status: ORDER_STATUS.PAID };
+
+  const [
+    revenueTotal,
+    revenueMonth,
+    revenuePrevMonth,
+    revenueToday,
+    paidOrdersCount,
+    lebalmaOutstanding,
+    lebalmaCollected,
+    revByMonthRows,
+    byMethodRows,
+  ] = await Promise.all([
+    Order.sum('total', { where: paid }),
+    Order.sum('total', { where: { ...paid, createdAt: { [Op.gte]: monthStart } } }),
+    Order.sum('total', { where: { ...paid, createdAt: { [Op.gte]: prevMonthStart, [Op.lt]: monthStart } } }),
+    Order.sum('total', { where: { ...paid, createdAt: { [Op.gte]: dayStart } } }),
+    Order.count({ where: paid }),
+    LebalmaInstallment.sum('amount', { where: { status: { [Op.ne]: INSTALLMENT_STATUS.PAID } } }),
+    LebalmaInstallment.sum('amount', { where: { status: INSTALLMENT_STATUS.PAID } }),
+    Order.findAll({
+      attributes: [[fn('DATE_FORMAT', col('createdAt'), '%Y-%m'), 'month'], [fn('SUM', col('total')), 'revenue']],
+      where: { ...paid, createdAt: { [Op.gte]: since12 } },
+      group: [fn('DATE_FORMAT', col('createdAt'), '%Y-%m')],
+      raw: true,
+    }),
+    Order.findAll({
+      attributes: ['paymentMethod', [fn('SUM', col('total')), 'revenue'], [fn('COUNT', col('id')), 'count']],
+      where: paid,
+      group: ['paymentMethod'],
+      raw: true,
+    }),
+  ]);
+
+  const total = revenueTotal || 0;
+  const month = revenueMonth || 0;
+  const prev = revenuePrevMonth || 0;
+  const growthPercent = prev > 0 ? Math.round(((month - prev) / prev) * 100) : month > 0 ? 100 : 0;
+
+  return success(res, {
+    data: {
+      revenueTotal: total,
+      revenueMonth: month,
+      revenuePrevMonth: prev,
+      revenueToday: revenueToday || 0,
+      growthPercent,
+      paidOrdersCount: paidOrdersCount || 0,
+      avgOrderValue: paidOrdersCount ? Math.round(total / paidOrdersCount) : 0,
+      lebalmaOutstanding: lebalmaOutstanding || 0,
+      lebalmaCollected: lebalmaCollected || 0,
+      revenueByMonth: buildMonths(revByMonthRows, 12),
+      revenueByMethod: byMethodRows.map((r) => ({
+        method: r.paymentMethod || 'autre',
+        revenue: Number(r.revenue) || 0,
+        count: Number(r.count) || 0,
+      })),
+    },
+  });
+});
+
+const genRef = (prefix = 'CMD') => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+
+// POST /api/admin/orders  → commande créée par l'admin (vente sur place / au comptoir)
+// body: { userId?, customer:{name,phone}, items:[{productId,quantity}], paymentMethod, status, shippingFee }
+export const createManualOrder = asyncHandler(async (req, res) => {
+  const { userId, customer = {}, items = [], paymentMethod = 'cash', status = ORDER_STATUS.PAID, shippingFee = 0 } = req.body;
+
+  const lines = (Array.isArray(items) ? items : [])
+    .map((it) => ({ productId: Number(it.productId), quantity: Math.max(1, Number(it.quantity) || 1) }))
+    .filter((it) => it.productId);
+  if (!lines.length) return fail(res, { status: 400, message: 'Ajoutez au moins un article' });
+
+  // Client : existant, sinon compte partagé « Vente au comptoir »
+  let clientUser = userId ? await User.findByPk(Number(userId)) : null;
+  if (!clientUser) {
+    const [walkin] = await User.findOrCreate({
+      where: { email: 'comptoir@cheikhtidiane.local' },
+      defaults: {
+        name: 'Vente au comptoir',
+        email: 'comptoir@cheikhtidiane.local',
+        password: crypto.randomBytes(24).toString('hex'),
+        role: ROLES.CLIENT,
+      },
+    });
+    clientUser = walkin;
+  }
+
+  const products = await Product.findAll({ where: { id: [...new Set(lines.map((l) => l.productId))] } });
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const valid = lines.filter((l) => byId.has(l.productId));
+  if (!valid.length) return fail(res, { status: 400, message: 'Aucun produit valide' });
+
+  const subtotal = valid.reduce((s, l) => s + byId.get(l.productId).price * l.quantity, 0);
+  const fee = Number(shippingFee) || 0;
+  const paid = status === ORDER_STATUS.PAID;
+
+  const order = await Order.create({
+    reference: genRef(),
+    userId: clientUser.id,
+    status,
+    paymentStatus: paid ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.PENDING,
+    subtotal,
+    shippingFee: fee,
+    total: subtotal + fee,
+    paymentMethod,
+    shippingName: customer.name || clientUser.name,
+    shippingPhone: customer.phone || clientUser.phone,
+  });
+
+  for (const l of valid) {
+    const p = byId.get(l.productId);
+    await OrderItem.create({
+      orderId: order.id,
+      productId: p.id,
+      productName: p.name,
+      unitPrice: p.price,
+      quantity: l.quantity,
+    });
+  }
+
+  return created(res, { message: 'Commande créée', data: order });
 });
 
 // GET /api/admin/orders  → toutes les commandes

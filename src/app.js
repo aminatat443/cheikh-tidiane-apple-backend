@@ -3,9 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/error.middleware.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
@@ -51,6 +54,21 @@ app.get('/health', (req, res) => {
 
 // --- Routes API ---
 app.use('/api', routes);
+
+// --- Frontend (production) : Express sert le build React → un seul déploiement ---
+// Copiez le contenu de `cheikh_tidiane_apple_frontend/dist` dans `backend/public`
+// (ou pointez CLIENT_DIST_PATH vers le dossier `dist`).
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = process.env.CLIENT_DIST_PATH
+    ? path.resolve(process.env.CLIENT_DIST_PATH)
+    : path.resolve(__dirname, '../public');
+  app.use(express.static(clientDist));
+  // Fallback SPA : tout ce qui n'est ni /api ni /uploads renvoie index.html.
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // --- Gestion des erreurs ---
 app.use(notFound);

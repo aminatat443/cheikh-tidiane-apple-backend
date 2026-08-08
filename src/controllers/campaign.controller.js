@@ -17,14 +17,16 @@ const SHOP_DEFAULTS = { name: 'Cheikh Tidiane Apple', address: 'Dakar, Sénégal
 const CAMPAIGNS = {
   promo: {
     build: buildPromoEmail,
-    subject: (shop) => `${shop.name} — Jusqu'à 30% de réduction sur les iPhone`,
-    order: [['isFeatured', 'DESC'], ['isPromo', 'DESC'], ['isNew', 'DESC'], ['createdAt', 'DESC']],
+    subject: (shop) => `${shop.name} — Nos promotions du moment`,
+    where: { isPromo: true }, // uniquement les produits en promo sur le site
+    order: [['isFeatured', 'DESC'], ['createdAt', 'DESC']],
     text: 'Découvrez nos meilleures offres du moment.',
   },
   newsletter: {
     build: buildNewsletterEmail,
     subject: (shop) => `${shop.name} — Nouveaux arrivages`,
-    order: [['isNew', 'DESC'], ['createdAt', 'DESC']],
+    where: { isNew: true }, // uniquement les nouveautés du site
+    order: [['createdAt', 'DESC']],
     text: 'Découvrez nos tout derniers arrivages.',
   },
 };
@@ -38,6 +40,7 @@ async function getShop() {
 async function buildEmail(type) {
   const cfg = CAMPAIGNS[type];
   const all = await Product.findAll({
+    where: cfg.where || undefined,
     include: [{ model: Category, as: 'category', attributes: ['slug', 'name'] }],
     order: cfg.order,
     limit: 8,

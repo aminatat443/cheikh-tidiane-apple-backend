@@ -8,7 +8,10 @@ const router = Router();
 
 router.post('/register', registerRules, validate, authController.register);
 router.post('/login', loginRules, validate, authController.login);
-router.post('/google', authController.googleAuth);
+// Connexion via Google Identity Services. Chemin volontairement « /social »
+// (et non « /google ») pour éviter le blocage par les bloqueurs de pub.
+router.post('/social', authController.googleAuth);
+router.post('/google', authController.googleAuth); // alias de compatibilité
 router.get('/me', protect, authController.me);
 
 // Double authentification (2FA / TOTP)

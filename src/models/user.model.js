@@ -22,6 +22,7 @@ const User = sequelize.define(
     },
     address: { type: DataTypes.STRING },
     city: { type: DataTypes.STRING },
+    deliveryZone: { type: DataTypes.STRING }, // clé de zone de livraison mémorisée
     avatar: { type: DataTypes.STRING },
     // KYC (Lebalma)
     isKycVerified: { type: DataTypes.BOOLEAN, defaultValue: false },

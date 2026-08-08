@@ -9,9 +9,9 @@ import { success, created, fail } from '../utils/apiResponse.js';
 import { ADMIN_ROLES } from '../utils/constants.js';
 
 // Client Google (null si non configuré → l'endpoint renvoie 501).
-const googleClient = process.env.GOOGLE_CLIENT_ID
-  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
-  : null;
+// .trim() : tolère un espace accidentel dans le .env (ex. « = 796... »).
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 /** Émet le jeton final ou déclenche l'étape 2FA selon le compte. */
 function issueSession(res, user) {
@@ -89,7 +89,7 @@ export const googleAuth = asyncHandler(async (req, res) => {
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: GOOGLE_CLIENT_ID,
     });
     payload = ticket.getPayload();
   } catch {
