@@ -260,24 +260,56 @@ export const financeStats = asyncHandler(async (req, res) => {
 
 const genRef = (prefix = 'CMD') => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 
+const WALKIN_EMAIL = 'comptoir@cheikhtidiane.local';
+const onlyDigits = (s) => (s || '').replace(/\D/g, '');
+
+/**
+ * Rattache automatiquement une vente au comptoir à un client déjà inscrit :
+ * on compare le téléphone (9 derniers chiffres, robuste au préfixe +221)
+ * puis, à défaut, l'adresse exacte. Renvoie l'utilisateur trouvé ou null.
+ */
+async function findClientByContact({ phone, address } = {}) {
+  const phoneTail = onlyDigits(phone).slice(-9);
+  const addr = (address || '').trim().toLowerCase();
+  if (phoneTail.length < 8 && addr.length < 5) return null;
+
+  const clients = await User.findAll({ where: { role: ROLES.CLIENT } });
+  return (
+    clients.find((c) => {
+      if (c.email === WALKIN_EMAIL) return false;
+      if (phoneTail.length >= 8 && onlyDigits(c.phone).slice(-9) === phoneTail) return true;
+      if (addr.length >= 5 && (c.address || '').trim().toLowerCase() === addr) return true;
+      return false;
+    }) || null
+  );
+}
+
 // POST /api/admin/orders  → commande créée par l'admin (vente sur place / au comptoir)
-// body: { userId?, customer:{name,phone}, items:[{productId,quantity}], paymentMethod, status, shippingFee }
+// body: { userId?, customer:{name,phone,address,city}, items:[{productId,quantity}], paymentMethod, status, shippingFee }
 export const createManualOrder = asyncHandler(async (req, res) => {
   const { userId, customer = {}, items = [], paymentMethod = 'cash', status = ORDER_STATUS.PAID, shippingFee = 0 } = req.body;
+
+  const name = (customer.name || '').trim();
+  if (!name) return fail(res, { status: 400, message: 'Le nom du client est obligatoire' });
 
   const lines = (Array.isArray(items) ? items : [])
     .map((it) => ({ productId: Number(it.productId), quantity: Math.max(1, Number(it.quantity) || 1) }))
     .filter((it) => it.productId);
   if (!lines.length) return fail(res, { status: 400, message: 'Ajoutez au moins un article' });
 
-  // Client : existant, sinon compte partagé « Vente au comptoir »
+  // Résolution du client :
+  //  1) client explicitement choisi (userId) ;
+  //  2) sinon rattachement AUTOMATIQUE si le téléphone/adresse correspond à un client existant ;
+  //  3) sinon compte partagé « Vente au comptoir ».
   let clientUser = userId ? await User.findByPk(Number(userId)) : null;
+  if (!clientUser) clientUser = await findClientByContact(customer);
+  const linkedToClient = !!clientUser && clientUser.email !== WALKIN_EMAIL;
   if (!clientUser) {
     const [walkin] = await User.findOrCreate({
-      where: { email: 'comptoir@cheikhtidiane.local' },
+      where: { email: WALKIN_EMAIL },
       defaults: {
         name: 'Vente au comptoir',
-        email: 'comptoir@cheikhtidiane.local',
+        email: WALKIN_EMAIL,
         password: crypto.randomBytes(24).toString('hex'),
         role: ROLES.CLIENT,
       },
@@ -303,8 +335,10 @@ export const createManualOrder = asyncHandler(async (req, res) => {
     shippingFee: fee,
     total: subtotal + fee,
     paymentMethod,
-    shippingName: customer.name || clientUser.name,
-    shippingPhone: customer.phone || clientUser.phone,
+    shippingName: name,
+    shippingPhone: (customer.phone || '').trim() || clientUser.phone,
+    shippingAddress: (customer.address || '').trim() || clientUser.address || null,
+    shippingCity: (customer.city || '').trim() || clientUser.city || null,
   });
 
   for (const l of valid) {
@@ -318,7 +352,11 @@ export const createManualOrder = asyncHandler(async (req, res) => {
     });
   }
 
-  return created(res, { message: 'Commande créée', data: order });
+  return created(res, {
+    message: linkedToClient ? 'Commande créée et rattachée au client existant' : 'Commande créée',
+    data: order,
+    linkedClient: linkedToClient ? { id: clientUser.id, name: clientUser.name } : null,
+  });
 });
 
 // GET /api/admin/orders  → toutes les commandes

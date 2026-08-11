@@ -9,6 +9,14 @@ import { sequelize } from '../models/index.js';
  */
 async function run() {
   await sequelize.authenticate();
+
+  // Spécifique MySQL/MariaDB (limite de 64 clés + `SHOW INDEX`). Sur PostgreSQL,
+  // ce problème n'existe pas : on ne fait rien.
+  if (sequelize.getDialect() !== 'mysql' && sequelize.getDialect() !== 'mariadb') {
+    console.log(`ℹ️  Dialecte « ${sequelize.getDialect()} » : nettoyage d'index inutile (aucune limite de clés). Rien à faire.`);
+    process.exit(0);
+  }
+
   const [tables] = await sequelize.query('SHOW TABLES');
   let dropped = 0;
 

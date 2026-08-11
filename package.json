@@ -42,6 +42,8 @@
     "mysql2": "^3.11.5",
     "nodemailer": "^6.9.16",
     "pdfkit": "^0.15.2",
+    "pg": "^8.23.0",
+    "pg-hstore": "^2.3.4",
     "qrcode": "^1.5.4",
     "sequelize": "^6.37.5",
     "socket.io": "^4.8.1",

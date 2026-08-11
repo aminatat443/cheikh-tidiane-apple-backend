@@ -17,10 +17,16 @@ async function start() {
     await sequelize.authenticate();
     console.log('✅ Connexion MySQL établie.');
 
-    // Synchronise les modèles en développement (en prod : utiliser des migrations)
+    // Synchronise les modèles en développement (en prod : utiliser des migrations).
+    // ⚠️ On n'utilise PLUS `alter: true` au démarrage : à chaque restart il ré-ajoutait
+    // des index (email_2, email_3, …) jusqu'à dépasser la limite MySQL de 64 clés/table
+    // → crash « Too many keys ». Par défaut : `sync()` simple (crée les tables manquantes,
+    // ne modifie pas les tables existantes). Pour appliquer un CHANGEMENT de modèle,
+    // lancer explicitement une fois : `npm run db:sync` (ou démarrer avec DB_SYNC=alter).
     if (process.env.NODE_ENV !== 'production') {
-      await sequelize.sync({ alter: true });
-      console.log('✅ Modèles Sequelize synchronisés.');
+      const alter = process.env.DB_SYNC === 'alter';
+      await sequelize.sync(alter ? { alter: true } : undefined);
+      console.log(`✅ Modèles Sequelize synchronisés${alter ? ' (alter)' : ''}.`);
     }
 
     server.listen(PORT, () => {

@@ -25,14 +25,15 @@ export async function findProducts(query = {}) {
 
   const where = {};
 
+  // Op.iLike = LIKE insensible à la casse (Postgres) : « iphone » trouve « iPhone ».
   if (q) {
     where[Op.or] = [
-      { name: { [Op.like]: `%${q}%` } },
-      { model: { [Op.like]: `%${q}%` } },
-      { description: { [Op.like]: `%${q}%` } },
+      { name: { [Op.iLike]: `%${q}%` } },
+      { model: { [Op.iLike]: `%${q}%` } },
+      { description: { [Op.iLike]: `%${q}%` } },
     ];
   }
-  if (model) where.model = { [Op.like]: `%${model}%` };
+  if (model) where.model = { [Op.iLike]: `%${model}%` };
   if (minPrice || maxPrice) {
     where.price = {};
     if (minPrice) where.price[Op.gte] = Number(minPrice);
