@@ -30,7 +30,7 @@ async function start() {
     }
 
     server.listen(PORT, () => {
-      console.log(`🚀 API en écoute sur http://localhost:${PORT}`);
+      console.log(`🚀 API en écoute sur http://https://cheikh-tidiane-apple-backend.onrender.com/:${PORT}`);
     });
   } catch (error) {
     console.error('❌ Impossible de démarrer le serveur :', error.message);
