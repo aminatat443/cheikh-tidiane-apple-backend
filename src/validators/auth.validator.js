@@ -13,3 +13,14 @@ export const loginRules = [
   body('email').isEmail().withMessage('Email invalide').normalizeEmail(),
   body('password').notEmpty().withMessage('Le mot de passe est requis'),
 ];
+
+export const forgotPasswordRules = [
+  body('email').isEmail().withMessage('Email invalide').normalizeEmail(),
+];
+
+export const resetPasswordRules = [
+  body('token').notEmpty().withMessage('Jeton manquant'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Le mot de passe doit contenir au moins 6 caractères'),
+];

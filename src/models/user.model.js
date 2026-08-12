@@ -36,11 +36,29 @@ const User = sequelize.define(
     // Double authentification (TOTP / Google Authenticator)
     twoFactorEnabled: { type: DataTypes.BOOLEAN, defaultValue: false },
     twoFactorSecret: { type: DataTypes.STRING }, // secret base32 — jamais exposé au client
+    // Vérification d'email (à l'inscription)
+    emailVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
+    emailVerifyToken: { type: DataTypes.STRING }, // hash SHA-256 du jeton — jamais exposé
+    emailVerifyExpires: { type: DataTypes.DATE },
+    // Réinitialisation de mot de passe (« mot de passe oublié »)
+    passwordResetToken: { type: DataTypes.STRING }, // hash SHA-256 du jeton — jamais exposé
+    passwordResetExpires: { type: DataTypes.DATE },
   },
   {
     tableName: 'users',
-    // On n'expose jamais le mot de passe ni le secret 2FA par défaut.
-    defaultScope: { attributes: { exclude: ['password', 'twoFactorSecret'] } },
+    // On n'expose jamais le mot de passe, le secret 2FA ni les jetons par défaut.
+    defaultScope: {
+      attributes: {
+        exclude: [
+          'password',
+          'twoFactorSecret',
+          'emailVerifyToken',
+          'emailVerifyExpires',
+          'passwordResetToken',
+          'passwordResetExpires',
+        ],
+      },
+    },
     scopes: { withPassword: { attributes: {} } },
     hooks: {
       beforeSave: async (user) => {

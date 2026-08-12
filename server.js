@@ -15,7 +15,7 @@ async function start() {
   try {
     // Vérifie la connexion MySQL
     await sequelize.authenticate();
-    console.log('✅ Connexion MySQL établie.');
+    console.log('✅ Connexion Postgres établie.');
 
     // Synchronise les modèles en développement (en prod : utiliser des migrations).
     // ⚠️ On n'utilise PLUS `alter: true` au démarrage : à chaque restart il ré-ajoutait

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Op } from 'sequelize';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { OAuth2Client } from 'google-auth-library';
@@ -7,11 +8,51 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { signToken, signTempToken, verifyToken } from '../utils/jwt.js';
 import { success, created, fail } from '../utils/apiResponse.js';
 import { ADMIN_ROLES } from '../utils/constants.js';
+import { sendMail, isMailConfigured, actionEmail } from '../utils/mailer.js';
 
 // Client Google (null si non configuré → l'endpoint renvoie 501).
 // .trim() : tolère un espace accidentel dans le .env (ex. « = 796... »).
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+// Base de l'app cliente (pour construire les liens des e-mails).
+const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+
+// Durées de validité des jetons.
+const EMAIL_VERIFY_TTL = 24 * 60 * 60 * 1000; // 24 h
+const PASSWORD_RESET_TTL = 60 * 60 * 1000; // 1 h
+
+/** Génère un jeton : `raw` envoyé par e-mail, `hash` (SHA-256) stocké en base. */
+function makeToken() {
+  const raw = crypto.randomBytes(32).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  return { raw, hash };
+}
+const hashToken = (raw) => crypto.createHash('sha256').update(String(raw || '')).digest('hex');
+
+/**
+ * Génère un jeton de vérification, le stocke (hash + expiration) et envoie l'e-mail.
+ * En dev sans SMTP, le lien est loggé dans la console pour pouvoir tester.
+ */
+async function sendVerificationEmail(user) {
+  const { raw, hash } = makeToken();
+  await user.update({ emailVerifyToken: hash, emailVerifyExpires: new Date(Date.now() + EMAIL_VERIFY_TTL) });
+  const link = `${CLIENT_URL}/verifier-email?token=${raw}`;
+  await sendMail({
+    to: user.email,
+    subject: 'Confirmez votre adresse e-mail — Cheikh Tidiane Apple',
+    html: actionEmail({
+      name: user.name,
+      title: 'Confirmez votre e-mail',
+      message: 'Bienvenue ! Il ne reste qu\'une étape : confirmez votre adresse e-mail pour sécuriser votre compte.',
+      buttonLabel: 'Confirmer mon e-mail',
+      link,
+      note: 'Ce lien expire dans 24 heures.',
+    }),
+    text: `Confirmez votre e-mail : ${link}`,
+  });
+  if (!isMailConfigured()) console.log(`🔗 [DEV] Lien de vérification pour ${user.email} : ${link}`);
+}
 
 /** Émet le jeton final ou déclenche l'étape 2FA selon le compte. */
 function issueSession(res, user) {
@@ -34,7 +75,15 @@ function issueSession(res, user) {
 }
 
 function sanitize(user) {
-  const { password, twoFactorSecret, ...rest } = user.toJSON();
+  const {
+    password,
+    twoFactorSecret,
+    emailVerifyToken,
+    emailVerifyExpires,
+    passwordResetToken,
+    passwordResetExpires,
+    ...rest
+  } = user.toJSON();
   return rest;
 }
 
@@ -56,10 +105,19 @@ export const register = asyncHandler(async (req, res) => {
   if (existing) return fail(res, { status: 409, message: 'Cet email est déjà utilisé' });
 
   const user = await User.create({ name, email, password, phone });
-  const token = signToken({ id: user.id, role: user.role });
 
+  // Envoi de l'e-mail de confirmation (n'échoue pas l'inscription si l'e-mail plante).
+  try {
+    await sendVerificationEmail(user);
+  } catch (e) {
+    console.error('Envoi e-mail de vérification échoué :', e.message);
+  }
+
+  // Auto-connexion : le compte est utilisable, mais `emailVerified` reste false
+  // tant que le lien n'est pas cliqué (le front peut afficher un rappel).
+  const token = signToken({ id: user.id, role: user.role });
   return created(res, {
-    message: 'Compte créé avec succès',
+    message: 'Compte créé — vérifiez votre e-mail pour le confirmer',
     data: { user: sanitize(user), token },
   });
 });
@@ -212,4 +270,90 @@ export const disableTwoFactor = asyncHandler(async (req, res) => {
 // GET /api/auth/me
 export const me = asyncHandler(async (req, res) => {
   return success(res, { data: { user: req.user } });
+});
+
+// POST /api/auth/verify-email  { token }  → confirme l'adresse e-mail
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  if (!token) return fail(res, { status: 400, message: 'Jeton manquant' });
+
+  const user = await User.scope('withPassword').findOne({
+    where: { emailVerifyToken: hashToken(token), emailVerifyExpires: { [Op.gt]: new Date() } },
+  });
+  if (!user) return fail(res, { status: 400, message: 'Lien invalide ou expiré' });
+
+  await user.update({ emailVerified: true, emailVerifyToken: null, emailVerifyExpires: null });
+  return success(res, { message: 'E-mail confirmé avec succès', data: { user: sanitize(user) } });
+});
+
+// POST /api/auth/resend-verification  (authentifié)  → renvoie l'e-mail de confirmation
+export const resendVerification = asyncHandler(async (req, res) => {
+  const user = await User.scope('withPassword').findByPk(req.user.id);
+  if (!user) return fail(res, { status: 404, message: 'Utilisateur introuvable' });
+  if (user.emailVerified) return success(res, { message: 'E-mail déjà confirmé' });
+
+  try {
+    await sendVerificationEmail(user);
+  } catch (e) {
+    return fail(res, { status: 502, message: "Échec de l'envoi de l'e-mail" });
+  }
+  return success(res, { message: 'E-mail de confirmation renvoyé' });
+});
+
+// POST /api/auth/forgot-password  { email }  → envoie un lien de réinitialisation
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  // Réponse générique (ne révèle pas si l'e-mail existe → anti-énumération).
+  const generic = { message: 'Si un compte existe, un e-mail de réinitialisation a été envoyé.' };
+
+  const user = await User.scope('withPassword').findOne({ where: { email } });
+  if (user) {
+    const { raw, hash } = makeToken();
+    await user.update({
+      passwordResetToken: hash,
+      passwordResetExpires: new Date(Date.now() + PASSWORD_RESET_TTL),
+    });
+    const link = `${CLIENT_URL}/reinitialiser-mot-de-passe?token=${raw}`;
+    try {
+      await sendMail({
+        to: user.email,
+        subject: 'Réinitialisation de votre mot de passe — Cheikh Tidiane Apple',
+        html: actionEmail({
+          name: user.name,
+          title: 'Réinitialisez votre mot de passe',
+          message: 'Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau.',
+          buttonLabel: 'Réinitialiser mon mot de passe',
+          link,
+          note: 'Ce lien expire dans 1 heure. Si vous n\'êtes pas à l\'origine de cette demande, ignorez cet e-mail.',
+        }),
+        text: `Réinitialisez votre mot de passe : ${link}`,
+      });
+    } catch (e) {
+      console.error('Envoi e-mail de réinitialisation échoué :', e.message);
+    }
+    if (!isMailConfigured()) console.log(`🔗 [DEV] Lien de réinitialisation pour ${user.email} : ${link}`);
+  }
+
+  return success(res, generic);
+});
+
+// POST /api/auth/reset-password  { token, password }  → définit un nouveau mot de passe
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return fail(res, { status: 400, message: 'Jeton et mot de passe requis' });
+
+  const user = await User.scope('withPassword').findOne({
+    where: { passwordResetToken: hashToken(token), passwordResetExpires: { [Op.gt]: new Date() } },
+  });
+  if (!user) return fail(res, { status: 400, message: 'Lien invalide ou expiré' });
+
+  // Le hook beforeSave hache le mot de passe. On invalide le jeton après usage.
+  // On confirme aussi l'e-mail (l'utilisateur a prouvé qu'il le contrôle).
+  await user.update({
+    password,
+    passwordResetToken: null,
+    passwordResetExpires: null,
+    emailVerified: true,
+  });
+  return success(res, { message: 'Mot de passe réinitialisé. Vous pouvez vous connecter.' });
 });

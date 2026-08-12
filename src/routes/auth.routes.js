@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import * as authController from '../controllers/auth.controller.js';
-import { registerRules, loginRules } from '../validators/auth.validator.js';
+import {
+  registerRules,
+  loginRules,
+  forgotPasswordRules,
+  resetPasswordRules,
+} from '../validators/auth.validator.js';
 import { validate } from '../validators/validate.js';
 import { protect } from '../middleware/auth.middleware.js';
 
@@ -8,6 +13,14 @@ const router = Router();
 
 router.post('/register', registerRules, validate, authController.register);
 router.post('/login', loginRules, validate, authController.login);
+
+// Vérification d'e-mail (à l'inscription)
+router.post('/verify-email', authController.verifyEmail);
+router.post('/resend-verification', protect, authController.resendVerification);
+
+// Mot de passe oublié / réinitialisation
+router.post('/forgot-password', forgotPasswordRules, validate, authController.forgotPassword);
+router.post('/reset-password', resetPasswordRules, validate, authController.resetPassword);
 // Connexion via Google Identity Services. Chemin volontairement « /social »
 // (et non « /google ») pour éviter le blocage par les bloqueurs de pub.
 router.post('/social', authController.googleAuth);
