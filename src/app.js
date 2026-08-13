@@ -17,21 +17,30 @@ const app = express();
 // les images servies depuis /uploads (origines différentes en dev).
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-// CORS : liste blanche via CLIENT_URL (séparée par virgules).
-// En développement, on tolère n'importe quel localhost (le port Vite peut varier).
+// CORS : liste blanche via CLIENT_URL (séparée par virgules). Comparaison
+// TOLÉRANTE (espaces + slash final ignorés) pour éviter les faux négatifs.
+// En développement, on tolère n'importe quel localhost (le port Vite peut varier),
+// et en toute circonstance les sous-domaines *.netlify.app (site + deploy previews).
+const normalizeOrigin = (o) => (o || '').trim().replace(/\/+$/, '').toLowerCase();
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
-  .map((s) => s.trim());
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (allowedOrigins.includes(normalizeOrigin(origin))) return true;
+  if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) return true;
+  try {
+    if (/\.netlify\.app$/i.test(new URL(origin).hostname)) return true;
+  } catch { /* origine non-URL : ignorée */ }
+  return false;
+}
 
 app.use(
   cors({
     origin(origin, cb) {
       if (!origin) return cb(null, true); // curl, apps mobiles, same-origin
-      if (allowedOrigins.includes(origin)) return cb(null, true);
-      if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
-        return cb(null, true);
-      }
-      return cb(null, false); // non autorisé : pas d'en-tête CORS (le navigateur bloque)
+      return cb(null, isAllowedOrigin(origin)); // sinon : pas d'en-tête CORS → le navigateur bloque
     },
     credentials: true,
   })
