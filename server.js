@@ -1,5 +1,9 @@
 import http from 'http';
 import 'dotenv/config';
+import dns from 'node:dns';
+// Préfère l'IPv4 : évite les ETIMEDOUT quand l'hôte Postgres résout aussi en IPv6
+// non routable (fréquent en connexion distante Render depuis un réseau local).
+dns.setDefaultResultOrder('ipv4first');
 import app from './src/app.js';
 import { sequelize } from './src/models/index.js';
 import { initSocket } from './src/sockets/index.js';

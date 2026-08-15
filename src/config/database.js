@@ -23,7 +23,13 @@ const common = {
   dialect: 'postgres',
   logging: false,
   define: { timestamps: true, underscored: false },
-  pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
+  pool: { max: 10, min: 0, acquire: 60000, idle: 10000 },
+  // Réessaie automatiquement les erreurs de connexion transitoires (ETIMEDOUT,
+  // connexion réinitialisée…), fréquentes sur une base distante Render.
+  retry: {
+    max: 3,
+    match: [/ETIMEDOUT/, /ECONNRESET/, /ECONNREFUSED/, /EHOSTUNREACH/, /ENETUNREACH/, /SequelizeConnectionError/],
+  },
 };
 
 // Tolérance : on accepte une URL de connexion `postgres://…` fournie via
@@ -32,11 +38,15 @@ const common = {
 const isUrl = (v) => /^postgres(ql)?:\/\//i.test(v || '');
 const connectionUrl = isUrl(DATABASE_URL) ? DATABASE_URL : isUrl(DB_HOST) ? DB_HOST : null;
 
+// keepAlive : garde la connexion TCP vivante (évite les coupures sur base distante).
+// connectionTimeoutMillis : échoue vite (15 s) au lieu d'attendre ~24 s.
+common.dialectOptions = { keepAlive: true, connectionTimeoutMillis: 15000 };
+
 // SSL requis par Render (et la plupart des Postgres managés).
 // `rejectUnauthorized: false` : accepte le certificat auto-signé de Render.
 const useSsl = Boolean(connectionUrl) || DB_SSL === 'true';
 if (useSsl) {
-  common.dialectOptions = { ssl: { require: true, rejectUnauthorized: false } };
+  common.dialectOptions.ssl = { require: true, rejectUnauthorized: false };
 }
 
 export const sequelize = connectionUrl

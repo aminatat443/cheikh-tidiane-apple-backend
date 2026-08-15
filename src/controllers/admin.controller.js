@@ -447,14 +447,22 @@ export const allClients = asyncHandler(async (req, res) => {
 // POST /api/admin/clients  → l'admin enregistre un client non inscrit (ex. en boutique)
 export const createClient = asyncHandler(async (req, res) => {
   const { name, email, phone, address, city, password } = req.body;
-  if (!name || !email) return fail(res, { status: 400, message: 'Nom et email requis' });
+  if (!name || (!email && !phone)) {
+    return fail(res, { status: 400, message: 'Nom + email ou téléphone requis' });
+  }
 
-  const existing = await User.scope('withPassword').findOne({ where: { email } });
-  if (existing) return fail(res, { status: 409, message: 'Cet email est déjà utilisé' });
+  // Le modèle exige un email unique : on en génère un synthétique à partir du
+  // téléphone si l'admin n'a saisi qu'un numéro (client sans e-mail).
+  const finalEmail = (email && email.trim())
+    ? email.trim()
+    : `client-${onlyDigits(phone) || crypto.randomBytes(4).toString('hex')}@client.cheikhtidiane.local`;
+
+  const existing = await User.scope('withPassword').findOne({ where: { email: finalEmail } });
+  if (existing) return fail(res, { status: 409, message: 'Ce client existe déjà.' });
 
   const client = await User.create({
     name,
-    email,
+    email: finalEmail,
     phone,
     address,
     city,

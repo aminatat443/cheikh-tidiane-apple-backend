@@ -37,6 +37,8 @@ const Product = sequelize.define(
     price: { type: DataTypes.INTEGER, allowNull: false },
     oldPrice: { type: DataTypes.INTEGER }, // prix barré si promo
     stock: { type: DataTypes.INTEGER, defaultValue: 0 },
+    // État du produit renseigné par l'admin : 'neuf' ou 'reconditionne'.
+    condition: { type: DataTypes.STRING, defaultValue: 'reconditionne' },
     // Variantes stockées en JSON (compatibles MySQL & MariaDB)
     colors: jsonField('colors', []), // ex: [{name:"Noir",hex:"#111827"}]
     storages: jsonField('storages', []), // ex: ["128Go","256Go"]
